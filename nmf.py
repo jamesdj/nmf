@@ -1,9 +1,10 @@
+import itertools
+
 import numpy as np
 from sklearn.decomposition import NMF
-from sklearn.decomposition.nmf import non_negative_factorization
-from scipy.cluster.hierarchy import cophenet, average, ward
+from sklearn.metrics import mean_squared_error
+from scipy.cluster.hierarchy import cophenet, average
 import scipy.spatial.distance as ssd
-from sklearn.metrics import silhouette_score
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
@@ -103,3 +104,35 @@ def compute_consensus_distance_matrix(nmfs, x=None, axis='samples', permute=Fals
 
 def select_k_by_cophenetic_corr():
     pass
+
+
+def align_bases(w1, w2, return_dist=False):
+    # Todo: Allow other axis. If X.shape == (N, M) and M > N, would it be better to align H than W?
+    # H would contain more data to align, may be more robust...?
+    k = w1.shape[1]
+    order = range(k)
+    min_mse = 10E20
+    best_order = order
+    if k < 5:
+        for permutation in itertools.permutations(order): # there are faster ways but it's not a bottleneck
+            w2_perm = w2[:, permutation]
+            mse = mean_squared_error(w1, w2_perm)
+            if mse < min_mse:
+                min_mse = mse
+                best_order = permutation
+    else:
+        pairwise_col_dists = np.ones((k, k)) * -1
+        idxs_left = list(range(k))
+        greedy_best_order = []
+        for i in range(k):
+            col_i = w1[:,i]
+            dists = np.array([mean_squared_error(col_i, w2[:,j]) for j in idxs_left])
+            min_idx = np.argmin(dists)
+            idx = idxs_left[min_idx]
+            greedy_best_order.append(idx)
+            idxs_left.remove(idx)
+        best_order = greedy_best_order
+        min_mse = mean_squared_error(w1, w2[:, best_order])
+    if return_dist:
+        return best_order, min_mse
+    return best_order
